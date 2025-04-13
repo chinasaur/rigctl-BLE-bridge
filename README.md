@@ -15,3 +15,9 @@ Clearly we will need to extend capabilities to make this more flexible :).
 
 # Requirements
 python3-serial, python3-dbus, libhamlib-utils
+
+# Usage
+`python3 bridge.py`
+
+And then use an app like nRF Connect to connect to the BLE server and send
+rigctl commands, e.g.: `F 14060000 f`.
