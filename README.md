@@ -17,6 +17,9 @@ Clearly we will need to extend capabilities to make this more flexible :).
 # Requirements
 python3-serial, python3-dbus, libhamlib-utils
 
+If your user doesn't have permission to start the BLE service / advertisement
+try adding your user to the `bluetooth` group and restarting the Pi.
+
 # Usage
 `python3 bridge.py`
 
