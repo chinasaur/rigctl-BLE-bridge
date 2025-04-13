@@ -1,6 +1,6 @@
+import subprocess
 import sys
 import dbus
-from gi.repository import GLib
 from ble_advertisement import Advertisement
 from ble_server import Application, Service, Characteristic
 
@@ -18,14 +18,6 @@ class TxCharacteristic(Characteristic):
     def __init__(self, bus, index, service):
         super().__init__(bus, index, UART_TX_CHARACTERISTIC_UUID, ["notify"], service)
         self.notifying = False
-        GLib.io_add_watch(sys.stdin, GLib.IO_IN, self.on_console_input)
-
-    def on_console_input(self, fd, condition):
-        del condition
-        s = fd.readline()
-        if not s.isspace():
-            self.send_tx(s)
-        return True
 
     def send_tx(self, s):
         if not self.notifying:
@@ -41,25 +33,48 @@ class TxCharacteristic(Characteristic):
 
 
 class RxCharacteristic(Characteristic):
-    def __init__(self, bus, index, service):
-        super().__init__(bus, index, UART_RX_CHARACTERISTIC_UUID, ["write"], service)
+    def __init__(self, bus, index, service, serial_device, hamlib_device, send_tx):
+        super().__init__(
+                bus, index, UART_RX_CHARACTERISTIC_UUID, ["write"], service)
+        self.serial_device = serial_device
+        self.hamlib_device = hamlib_device
+        self.send_tx = send_tx
 
     def WriteValue(self, value, options):
         cmd_str = bytearray(value).decode()
         print(f"remote: {cmd_str}")
 
+        cmd = ['/usr/bin/rigctl']
+        cmd += ['-r', self.serial_device]
+        cmd += ['-m', str(self.hamlib_device)]
+        cmd += cmd_str.split()
+        cp = subprocess.run(cmd, capture_output=True, timeout=10, text=True)
+        reply = cp.stdout.strip()
+        error = cp.stderr.strip() 
+        print("rigctl stdout:", reply)
+        print("rigctl stderr:", error)
+
+        if error:
+            self.send_tx(error)
+        elif reply:
+            self.send_tx(reply)
+
 
 class UartService(Service):
-    def __init__(self, bus, index):
+    def __init__(self, bus, index, serial_device, hamlib_device):
         super().__init__(bus, index, UART_SERVICE_UUID, True)
-        self.add_characteristic(TxCharacteristic(bus, 0, self))
-        self.add_characteristic(RxCharacteristic(bus, 1, self))
+        tx_characteristic = TxCharacteristic(bus, 0, self)
+        rx_characteristic = RxCharacteristic(
+                bus, 1, self, serial_device, hamlib_device,
+                tx_characteristic.send_tx)
+        self.add_characteristic(tx_characteristic)
+        self.add_characteristic(rx_characteristic)
 
 
 class UartApplication(Application):
-    def __init__(self, bus):
+    def __init__(self, bus, serial_device, hamlib_device):
         super().__init__(bus)
-        self.add_service(UartService(bus, 0))
+        self.add_service(UartService(bus, 0, serial_device, hamlib_device))
 
 
 class UartAdvertisement(Advertisement):
