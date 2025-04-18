@@ -8,7 +8,7 @@ The BLE code is derived with significant modification from:
 * https://github.com/mengguang/pi-ble-uart-server/blob/main/uart_peripheral.py
 
 # Requirements
-python3-serial, python3-dbus, libhamlib-utils
+python3-serial, python3-dbus, python3-gi, libhamlib-utils
 
 If your user doesn't have permission to start the BLE service / advertisement
 try adding your user to the `bluetooth` group and restarting the Pi.
@@ -23,7 +23,8 @@ MHz and ask for the new frequency setting as a reply.
 The program will attempt to autodetect usable serial ports and corresponding
 Hamlib device IDs. These can also be set manually using the extra read/write
 Characteristic config endpoints. You can also pass flag -d to add a dummy device
-for testing purposes.
+for testing purposes. To add autodetect for your rig, add it to
+`ble_bridge.HamlibDeviceCharacteristic.SERIAL_PORT_DESCRIPTION_TO_HAMLIB_DEVICE_MAP`.
 
 TODO(K6PLI): The extra config endpoints need descriptors added to make it more
 clear what they're for.
