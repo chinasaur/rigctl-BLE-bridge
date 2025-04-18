@@ -7,7 +7,7 @@ import serial.tools.list_ports
 import serial.tools.list_ports_common
 import ble_bridge
 
-mainloop = GLib.MainLoop()
+MAINLOOP = GLib.MainLoop()
 
 
 def register_app_cb():
@@ -16,7 +16,7 @@ def register_app_cb():
 
 def register_app_error_cb(error):
     print("Failed to register application: " + str(error))
-    mainloop.quit()
+    MAINLOOP.quit()
 
 
 def register_ad_cb():
@@ -25,7 +25,7 @@ def register_ad_cb():
 
 def register_ad_error_cb(error):
     print("Failed to register advertisement: " + str(error))
-    mainloop.quit()
+    MAINLOOP.quit()
 
 
 def setup_ble(mock_ports):
@@ -72,27 +72,10 @@ def main():
         info.description = "Hamlib Dummy"
         mock_ports.append(info)
 
-    # if not ports:
-    #     print("No serial ports detected.")
-    #     return
-    # print("Serial ports:")
-    # for port in ports:
-    #     print(port.device, port.description)
-    # if len(ports) > 1:
-    #     print("Handling multiple serial ports not yet supported.")
-    #     return
-
-    # port = ports[0]
-    # if port.description not in SERIAL_TO_HAMLIB_DEVICE_MAP:
-    #     print("Unknown device:", port.description)
-    #     return
-    # hamlib_device = SERIAL_TO_HAMLIB_DEVICE_MAP[port.description]
-    # print("Matching hamlib device:", hamlib_device)
-
     advertisement = setup_ble(mock_ports)
 
     try:
-        mainloop.run()
+        MAINLOOP.run()
     except KeyboardInterrupt:
         advertisement.Release()
 
