@@ -82,7 +82,7 @@ class HamlibDeviceCharacteristic(Characteristic):
     # TODO(K6PLI): Not too clear what's best to use here. VID/PID could be good.
     # For now just use description.
     SERIAL_PORT_DESCRIPTION_TO_HAMLIB_DEVICE_MAP = {
-            # 'Hamlib Dummy': 1,
+            'Hamlib Dummy': 1,
             'QDX Transceiver': 2052,
     }
 
