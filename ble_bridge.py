@@ -1,5 +1,4 @@
 import subprocess
-import sys
 import dbus
 import serial.tools.list_ports
 from ble_advertisement import Advertisement
@@ -10,7 +9,7 @@ DBUS_OM_IFACE = "org.freedesktop.DBus.ObjectManager"
 LE_ADVERTISING_MANAGER_IFACE = "org.bluez.LEAdvertisingManager1"
 GATT_MANAGER_IFACE = "org.bluez.GattManager1"
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
-LOCAL_NAME = "usb-ble-bridge"
+LOCAL_NAME = "rigctl-BLE-bridge"
 
 
 class TxCharacteristic(Characteristic):

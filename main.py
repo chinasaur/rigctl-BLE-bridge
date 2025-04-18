@@ -1,9 +1,7 @@
 import argparse
-import json
 import dbus
 import dbus.mainloop.glib
 from gi.repository import GLib
-import serial.tools.list_ports
 import serial.tools.list_ports_common
 import ble_bridge
 
