@@ -38,32 +38,38 @@ def setup_ble(mock_ports):
 
     service_manager = dbus.Interface(
         bus.get_object(ble_bridge.BLUEZ_SERVICE_NAME, adapter),
-        ble_bridge.GATT_MANAGER_IFACE)
+        ble_bridge.GATT_MANAGER_IFACE,
+    )
     advertising_manager = dbus.Interface(
         bus.get_object(ble_bridge.BLUEZ_SERVICE_NAME, adapter),
-        ble_bridge.LE_ADVERTISING_MANAGER_IFACE)
+        ble_bridge.LE_ADVERTISING_MANAGER_IFACE,
+    )
     app = ble_bridge.BridgeApplication(bus, mock_ports)
     advertisement = ble_bridge.BridgeAdvertisement(bus, 0)
     service_manager.RegisterApplication(
-        app.path, {}, reply_handler=register_app_cb,
-        error_handler=register_app_error_cb)
+        app.path, {}, reply_handler=register_app_cb, error_handler=register_app_error_cb
+    )
     advertising_manager.RegisterAdvertisement(
-        advertisement.get_path(), {}, reply_handler=register_ad_cb,
-        error_handler=register_ad_error_cb)
+        advertisement.get_path(),
+        {},
+        reply_handler=register_ad_cb,
+        error_handler=register_ad_error_cb,
+    )
     return advertisement
 
 
 def main():
     parser = argparse.ArgumentParser(
-            prog='rigctl-ble-bridge',
-            description='Bridge to control rigctl devices (radios, etc.) via BLE')
-    parser.add_argument('-d', '--add_dummy_port', action='store_true')
+        prog="rigctl-ble-bridge",
+        description="Bridge to control rigctl devices (radios, etc.) via BLE",
+    )
+    parser.add_argument("-d", "--add_dummy_port", action="store_true")
     args = parser.parse_args()
 
     mock_ports = []
     if args.add_dummy_port:
-        info = serial.tools.list_ports_common.ListPortInfo('/dev/null')
-        info.description = 'Hamlib Dummy'
+        info = serial.tools.list_ports_common.ListPortInfo("/dev/null")
+        info.description = "Hamlib Dummy"
         mock_ports.append(info)
 
     # if not ports:

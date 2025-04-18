@@ -31,10 +31,12 @@ class Advertisement(dbus.service.Object):
             properties["SolicitUUIDs"] = dbus.Array(self.solicit_uuids, signature="s")
         if self.manufacturer_data is not None:
             properties["ManufacturerData"] = dbus.Dictionary(
-                self.manufacturer_data, signature="qv")
+                self.manufacturer_data, signature="qv"
+            )
         if self.service_data is not None:
             properties["ServiceData"] = dbus.Dictionary(
-                self.service_data, signature="sv")
+                self.service_data, signature="sv"
+            )
         if self.local_name is not None:
             properties["LocalName"] = dbus.String(self.local_name)
         if self.include_tx_power is not None:

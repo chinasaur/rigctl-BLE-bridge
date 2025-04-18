@@ -10,12 +10,14 @@ GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 class Characteristic(dbus.service.Object):
     """org.bluez.GattCharacteristic1 interface implementation."""
 
-    def __init__(self, bus, path: str, uuid, flags, service, descriptors=[]):
+    def __init__(self, bus, path: str, uuid, flags, service, descriptors=None):
         self.bus = bus
         self.path = dbus.ObjectPath(path)
         self.uuid = uuid
         self.flags = flags
         self.service = service
+        if descriptors is None:
+            descriptors = []
         self.descriptors = descriptors
         super().__init__(bus, self.path)
 
@@ -63,8 +65,9 @@ class Characteristic(dbus.service.Object):
 class Service(dbus.service.Object):
     """org.bluez.GattService1 interface implementation."""
 
-    def __init__(self, bus, path: str, uuid, primary,
-                 characteristics: list[Characteristic]):
+    def __init__(
+        self, bus, path: str, uuid, primary, characteristics: list[Characteristic]
+    ):
         self.path = dbus.ObjectPath(path)
         self.bus = bus
         self.uuid = uuid
@@ -77,9 +80,7 @@ class Service(dbus.service.Object):
             GATT_SERVICE_IFACE: {
                 "UUID": self.uuid,
                 "Primary": self.primary,
-                "Characteristics": dbus.Array(
-                    self.characteristic_paths, signature="o"
-                ),
+                "Characteristics": dbus.Array(self.characteristic_paths, signature="o"),
             }
         }
 
