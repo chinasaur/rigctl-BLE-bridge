@@ -7,81 +7,12 @@ GATT_SERVICE_IFACE = "org.bluez.GattService1"
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 
 
-class Application(dbus.service.Object):
-    def __init__(self, bus):
-        self.path = "/"
-        self.services = []
-        dbus.service.Object.__init__(self, bus, self.path)
-
-    def get_path(self):
-        return dbus.ObjectPath(self.path)
-
-    def add_service(self, service):
-        self.services.append(service)
-
-    @dbus.service.method(DBUS_OM_IFACE, out_signature="a{oa{sa{sv}}}")
-    def GetManagedObjects(self):
-        response = {}
-        for service in self.services:
-            response[service.get_path()] = service.get_properties()
-            chrcs = service.get_characteristics()
-            for chrc in chrcs:
-                response[chrc.get_path()] = chrc.get_properties()
-        return response
-
-
-class Service(dbus.service.Object):
-    """org.bluez.GattService1 interface implementation."""
-
-    PATH_BASE = "/org/bluez/example/service"
-
-    def __init__(self, bus, index, uuid, primary):
-        self.path = self.PATH_BASE + str(index)
-        self.bus = bus
-        self.uuid = uuid
-        self.primary = primary
-        self.characteristics = []
-        dbus.service.Object.__init__(self, bus, self.path)
-
-    def get_properties(self):
-        return {
-            GATT_SERVICE_IFACE: {
-                "UUID": self.uuid,
-                "Primary": self.primary,
-                "Characteristics": dbus.Array(
-                    self.get_characteristic_paths(), signature="o"
-                ),
-            }
-        }
-
-    def get_path(self):
-        return dbus.ObjectPath(self.path)
-
-    def add_characteristic(self, characteristic):
-        self.characteristics.append(characteristic)
-
-    def get_characteristic_paths(self):
-        result = []
-        for chrc in self.characteristics:
-            result.append(chrc.get_path())
-        return result
-
-    def get_characteristics(self):
-        return self.characteristics
-
-    @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
-    def GetAll(self, interface):
-        if interface != GATT_SERVICE_IFACE:
-            raise ValueError()
-        return self.get_properties()[GATT_SERVICE_IFACE]
-
-
 class Characteristic(dbus.service.Object):
     """org.bluez.GattCharacteristic1 interface implementation."""
 
-    def __init__(self, bus, index, uuid, flags, service, descriptors=[]):
+    def __init__(self, bus, path: str, uuid, flags, service, descriptors=[]):
         self.bus = bus
-        self.path = service.path + "/char" + str(index)
+        self.path = dbus.ObjectPath(path)
         self.uuid = uuid
         self.flags = flags
         self.service = service
@@ -91,19 +22,16 @@ class Characteristic(dbus.service.Object):
     def get_properties(self):
         return {
             GATT_CHRC_IFACE: {
-                "Service": self.service.get_path(),
+                "Service": self.service.path,
                 "UUID": self.uuid,
                 "Flags": self.flags,
                 "Descriptors": dbus.Array(self.descriptor_paths, signature="o"),
             }
         }
 
-    def get_path(self):
-        return dbus.ObjectPath(self.path)
-
     @property
     def descriptor_paths(self):
-        return [desc.get_path() for desc in self.descriptors]
+        return [desc.path for desc in self.descriptors]
 
     @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
     def GetAll(self, interface):
@@ -130,3 +58,53 @@ class Characteristic(dbus.service.Object):
     @dbus.service.signal(DBUS_PROP_IFACE, signature="sa{sv}as")
     def PropertiesChanged(self, interface, changed, invalidated):
         pass
+
+
+class Service(dbus.service.Object):
+    """org.bluez.GattService1 interface implementation."""
+
+    def __init__(self, bus, path: str, uuid, primary,
+                 characteristics: list[Characteristic]):
+        self.path = dbus.ObjectPath(path)
+        self.bus = bus
+        self.uuid = uuid
+        self.primary = primary
+        self.characteristics = characteristics
+        dbus.service.Object.__init__(self, bus, self.path)
+
+    def get_properties(self):
+        return {
+            GATT_SERVICE_IFACE: {
+                "UUID": self.uuid,
+                "Primary": self.primary,
+                "Characteristics": dbus.Array(
+                    self.characteristic_paths, signature="o"
+                ),
+            }
+        }
+
+    @property
+    def characteristic_paths(self):
+        return [chrc.path for chrc in self.characteristics]
+
+    @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
+    def GetAll(self, interface):
+        if interface != GATT_SERVICE_IFACE:
+            raise ValueError()
+        return self.get_properties()[GATT_SERVICE_IFACE]
+
+
+class Application(dbus.service.Object):
+    def __init__(self, bus, services):
+        self.path = dbus.ObjectPath("/")
+        self.services = services
+        dbus.service.Object.__init__(self, bus, self.path)
+
+    @dbus.service.method(DBUS_OM_IFACE, out_signature="a{oa{sa{sv}}}")
+    def GetManagedObjects(self):
+        response = {}
+        for service in self.services:
+            response[service.path] = service.get_properties()
+            for chrc in service.characteristics:
+                response[chrc.path] = chrc.get_properties()
+        return response
