@@ -26,7 +26,7 @@ def register_ad_error_cb(error):
     MAINLOOP.quit()
 
 
-def setup_ble(mock_ports):
+def setup_ble(extra_ports):
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     bus = dbus.SystemBus()
     adapter = ble_bridge.find_adapter(bus)
@@ -42,7 +42,7 @@ def setup_ble(mock_ports):
         bus.get_object(ble_bridge.BLUEZ_SERVICE_NAME, adapter),
         ble_bridge.LE_ADVERTISING_MANAGER_IFACE,
     )
-    app = ble_bridge.BridgeApplication(bus, mock_ports)
+    app = ble_bridge.BridgeApplication(bus, extra_ports)
     advertisement = ble_bridge.BridgeAdvertisement(bus, 0)
     service_manager.RegisterApplication(
         app.path, {}, reply_handler=register_app_cb, error_handler=register_app_error_cb
@@ -64,13 +64,13 @@ def main():
     parser.add_argument("-d", "--add_dummy_port", action="store_true")
     args = parser.parse_args()
 
-    mock_ports = []
+    extra_ports = []
     if args.add_dummy_port:
         info = serial.tools.list_ports_common.ListPortInfo("/dev/null")
         info.description = "Hamlib Dummy"
-        mock_ports.append(info)
+        extra_ports.append(info)
 
-    advertisement = setup_ble(mock_ports)
+    advertisement = setup_ble(extra_ports)
 
     try:
         MAINLOOP.run()
