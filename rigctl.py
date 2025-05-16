@@ -91,6 +91,8 @@ class RigctlSubprocess:
         lines = out.replace(self.USER_PROMPT, "").split("\n")
         return "; ".join(l for l in lines if l)  # Drop any empty ones.
 
+    # TODO(K6PLI): Probably change to returning a single str with any error
+    # condition spelled out.
     def read(self) -> tuple[str | None, str | None]:
         _, _, errored = self.select()
         if errored:
@@ -101,8 +103,11 @@ class RigctlSubprocess:
         out = self.safe_read(self.subprocess.stdout)
         if out is not None and not out:
             # An empty reply is valid for set commands, but it can also indicate the process died.
-            if self.poll() is not None:
+            if self.poll() is None:
+                out = "Command accepted."
+            else:
                 self.reconnect()
+                out = None
         if out is not None:
             out = self.parse(out)
 
@@ -113,6 +118,7 @@ class RigctlSubprocess:
         return out, err
 
     def waitread(self, timeout_secs: float) -> tuple[str | None, str | None]:
+        """Recursively check if output is available up to timeout_secs."""
         start = time.time()
         out, err = None, None
         if timeout_secs <= 0.0:
