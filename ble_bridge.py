@@ -1,8 +1,9 @@
 import subprocess
 import dbus
 import serial.tools.list_ports
-from ble_advertisement import Advertisement
-from ble_server import Application, Service, Characteristic
+import ble_advertisement
+import ble_server
+import rigctl
 
 BLUEZ_SERVICE_NAME = "org.bluez"
 DBUS_OM_IFACE = "org.freedesktop.DBus.ObjectManager"
@@ -12,7 +13,7 @@ GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 LOCAL_NAME = "rigctl-BLE-bridge"
 
 
-class TxCharacteristic(Characteristic):
+class TxCharacteristic(ble_server.Characteristic):
     UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  # Nordic UART.
 
     def __init__(self, bus, path, service):
@@ -32,7 +33,7 @@ class TxCharacteristic(Characteristic):
         self.notifying = False
 
 
-class RxCharacteristic(Characteristic):
+class RxCharacteristic(ble_server.Characteristic):
     UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
 
     def __init__(self, bus, path, service):
@@ -44,23 +45,23 @@ class RxCharacteristic(Characteristic):
         self.service.bridge_command(cmd_str)
 
 
-class PortListCharacteristic(Characteristic):
+class PortListCharacteristic(ble_server.Characteristic):
     UUID = "d144ae91-eb03-426d-9c59-6659aa3bc324"
 
-    def __init__(self, bus, path, service, extra_ports):
-        self.extra_ports = extra_ports
+    def __init__(self, bus, path, service, extra_serial_ports):
+        self.extra_serial_ports = extra_serial_ports
         super().__init__(bus, path, self.UUID, ["read"], service)
 
-    def read_ports(self) -> list[serial.tools.list_ports_common.ListPortInfo]:
-        return serial.tools.list_ports.comports() + self.extra_ports
+    def read_serial_ports(self) -> list[serial.tools.list_ports_common.ListPortInfo]:
+        return serial.tools.list_ports.comports() + self.extra_serial_ports
 
     def ReadValue(self, options):
-        ports = self.read_ports()
-        value = ";".join(f"{p.device}:{p.description}" for p in ports)
+        serial_ports = self.read_serial_ports()
+        value = ";".join(f"{p.device}:{p.description}" for p in serial_ports)
         return [dbus.Byte(c.encode()) for c in value]
 
 
-class PortSelectCharacteristic(Characteristic):
+class PortSelectCharacteristic(ble_server.Characteristic):
     UUID = "d144ae92-eb03-426d-9c59-6659aa3bc324"
 
     def __init__(self, bus, path, service):
@@ -73,7 +74,7 @@ class PortSelectCharacteristic(Characteristic):
         self.value = value
 
 
-class HamlibDeviceCharacteristic(Characteristic):
+class HamlibDeviceCharacteristic(ble_server.Characteristic):
     UUID = "1a274176-8531-49c2-b127-a1b4138501fa"
     UNKNOWN_DEVICE = 0
 
@@ -89,11 +90,11 @@ class HamlibDeviceCharacteristic(Characteristic):
         self.value = None
 
     def map_device(self):
-        port_info = self.service.get_selected_port()
-        if port_info is None:
+        serial_port_info = self.service.get_selected_serial_port()
+        if serial_port_info is None:
             return self.UNKNOWN_DEVICE
         return self.SERIAL_PORT_DESCRIPTION_TO_HAMLIB_DEVICE_MAP.get(
-            port_info.description, self.UNKNOWN_DEVICE)
+            serial_port_info.description, self.UNKNOWN_DEVICE)
 
     def get_device(self):
         if self.value is None:
@@ -110,35 +111,42 @@ class HamlibDeviceCharacteristic(Characteristic):
         self.value = value
 
 
-class BridgeService(Service):
+class BridgeService(ble_server.Service):
     UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"  # Nordic UART
 
-    def __init__(self, bus, extra_ports):
+    def __init__(self, bus, extra_serial_ports):
         path = "/org/bluez/rigctl_bridge"
         self.tx = TxCharacteristic(bus, path + "/tx", self)
         self.rx = RxCharacteristic(bus, path + "/rx", self)
-        self.portlist = PortListCharacteristic(bus, path + "/portlist", self, extra_ports)
-        self.portselect = PortSelectCharacteristic(bus, path + "portselect", self)
+        self.serialportlist = PortListCharacteristic(bus, path + "/serialportlist", self, extra_serial_ports)
+        self.serialportselect = PortSelectCharacteristic(bus, path + "serialportselect", self)
         self.hamlib = HamlibDeviceCharacteristic(bus, path + "/hamlib", self)
-        characteristics = [self.tx, self.rx, self.portlist, self.portselect, self.hamlib]
+        characteristics = [self.tx, self.rx, self.serialportlist, self.serialportselect, self.hamlib]
         super().__init__(bus, path, self.UUID, True, characteristics)
 
-    def get_selected_port(self):
-        ports = self.portlist.read_ports()
+        self.rigctl_manager = rigctl.RigctlManager()
 
-        if not self.portselect.value:
-            if len(ports) == 1:
-                return ports[0]
+    def cull_invalid_connections(self, valid_serial_ports):
+        valid_serial_device_paths = frozenset(p.device for p in valid_serial_ports)
+        self.rigctl_manager.cleanup(valid_serial_device_paths)
+
+    def get_selected_serial_port(self):
+        serial_ports = self.serialportlist.read_serial_ports()
+        self.cull_invalid_connections(serial_ports)  # Opportunistic since we have serial ports in hand.
+
+        if not self.serialportselect.value:
+            if len(serial_ports) == 1:
+                return serial_ports[0]
             return None
 
-        for port in ports:
-            if port.device == self.portselect.value:
-                return port
-        return None  # Selected port is no longer present.
+        for serial_port in serial_ports:
+            if serial_port.device == self.serialportselect.value:
+                return serial_port
+        return None  # Selected serial port is no longer present.
 
     def bridge_command(self, cmd_str):
-        port = self.get_selected_port()
-        if port is None:
+        serial_port = self.get_selected_serial_port()
+        if serial_port is None:
             self.tx.send_tx("No serial port found for command.")
             return
 
@@ -147,30 +155,30 @@ class BridgeService(Service):
             self.tx.send_tx("No recognized Hamlib device.")
             return
 
-        cmd = ["/usr/bin/rigctl"]
-        cmd += ["-r", port.device]
-        cmd += ["-m", str(hamlib_device)]
-        cmd += cmd_str.split()
-        print(cmd)
-        cp = subprocess.run(cmd, capture_output=True, timeout=10, text=True)
-        reply = cp.stdout.strip()
-        error = cp.stderr.strip()
-        print("rigctl stdout:", reply)
-        print("rigctl stderr:", error)
+        rigctl = self.rigctl_manager.get_rigctl(serial_port.device, hamlib_device)
+        written = rigctl.write(cmd_str)
+        if not written:
+            self.tx.send_tx("Bridging to rigctl failed to write any bytes.")
+            return
 
+        reply, error = rigctl.waitread(timeout_secs=2.0)
         if error:
             self.tx.send_tx(error)
         elif reply:
             self.tx.send_tx(reply)
+        elif reply is not None:
+            self.tx.send_tx("Command accepted.")
+        else:
+            self.tx.send_tx("No reply from rigctl.")
 
 
-class BridgeApplication(Application):
-    def __init__(self, bus, extra_ports):
-        uart_service = BridgeService(bus, extra_ports)
+class BridgeApplication(ble_server.Application):
+    def __init__(self, bus, extra_serial_ports):
+        uart_service = BridgeService(bus, extra_serial_ports)
         super().__init__(bus, services=[uart_service])
 
 
-class BridgeAdvertisement(Advertisement):
+class BridgeAdvertisement(ble_advertisement.Advertisement):
     def __init__(self, bus, index):
         super().__init__(bus, index, "peripheral")
         self.add_service_uuid(BridgeService.UUID)
